@@ -10,6 +10,7 @@ import {
   Save,
   Trash2,
   Undo2,
+  Waypoints,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useCustomRouteStore } from "@/store/customRouteStore";
 import { geoService } from "@/services/geolocation/geoService";
+import { fetchDrivingRoute } from "@/services/routing/routingService";
 import { formatKm } from "@/utils/geo";
 import type { LatLng, Route } from "@/types";
 
@@ -49,15 +51,52 @@ export function RouteBuilder({
   const saveDraft = useCustomRouteStore((s) => s.saveDraft);
   const savedRoutes = useCustomRouteStore((s) => s.savedRoutes);
   const deleteSavedRoute = useCustomRouteStore((s) => s.deleteSavedRoute);
+  const updateSavedRoutePath = useCustomRouteStore(
+    (s) => s.updateSavedRoutePath
+  );
 
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [reroutingId, setReroutingId] = useState<string | null>(null);
 
-  function handleSave() {
-    // Prefer the road-following polyline; fall back to raw waypoints if OSRM
-    // failed or hasn't finished yet.
-    const route = saveDraft(routedPath ?? undefined);
-    if (route) onSaved(route);
+  async function handleSave() {
+    if (draftPath.length < 2 || saving) return;
+    setSaving(true);
+    try {
+      // Prefer the already-fetched road-following polyline. If the user hit
+      // save before debounce/OSRM finished, fetch synchronously now so we
+      // never persist a straight line by accident.
+      let finalPath: LatLng[] | undefined = routedPath;
+      if (!finalPath) {
+        try {
+          const result = await fetchDrivingRoute(draftPath);
+          finalPath = result.path;
+        } catch {
+          // OSRM failed — fall back to the waypoints as a straight line.
+          finalPath = undefined;
+        }
+      }
+      const route = saveDraft(finalPath);
+      if (route) onSaved(route);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRerouteSaved(route: Route) {
+    if (route.path.length < 2 || reroutingId === route.id) return;
+    setReroutingId(route.id);
+    try {
+      const first = route.path[0];
+      const last = route.path[route.path.length - 1];
+      const result = await fetchDrivingRoute([first, last]);
+      updateSavedRoutePath(route.id, result.path);
+    } catch {
+      // ignore — UI shows no path change
+    } finally {
+      setReroutingId(null);
+    }
   }
 
   async function handleUseCurrentLocation() {
@@ -80,37 +119,65 @@ export function RouteBuilder({
       <div className="space-y-2">
         <Button
           variant="outline"
-          size="lg"
-          className="w-full gap-2"
+          size="xl"
+          className="w-full gap-2 border-2"
           onClick={() => setDrawingMode(true)}
         >
-          <Pencil className="h-4 w-4" />
-          วาดเส้นทางบนแผนที่
+          <Pencil className="h-5 w-5" />
+          วาดเส้นทางเอง
         </Button>
         {savedRoutes.length > 0 && (
-          <Card>
+          <Card className="border-2">
             <CardContent className="space-y-2 p-3">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="text-sm font-bold text-muted-foreground">
                 เส้นทางที่บันทึกไว้
               </div>
-              <ul className="space-y-1.5">
-                {savedRoutes.map((r) => (
-                  <li
-                    key={r.id}
-                    className="flex items-center justify-between rounded-md border bg-background/60 px-2.5 py-1.5 text-sm"
-                  >
-                    <span className="truncate">{r.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      aria-label={`ลบ ${r.name}`}
-                      onClick={() => deleteSavedRoute(r.id)}
+              <ul className="space-y-2">
+                {savedRoutes.map((r) => {
+                  const isStraightLine = r.path.length <= 3;
+                  const isRerouting = reroutingId === r.id;
+                  return (
+                    <li
+                      key={r.id}
+                      className="flex items-center gap-2 rounded-xl border-2 bg-background/60 p-2.5"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </li>
-                ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate text-base font-semibold">
+                          {r.name}
+                        </div>
+                        {isStraightLine && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400">
+                            ⚠ เส้นตรง — กดปุ่มซ้ายเพื่อปรับตามถนน
+                          </div>
+                        )}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 border-2"
+                        aria-label={`ปรับเส้นทางตามถนน ${r.name}`}
+                        title="ปรับเส้นทางตามถนน"
+                        disabled={isRerouting}
+                        onClick={() => handleRerouteSaved(r)}
+                      >
+                        {isRerouting ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Waypoints className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 border-2 text-destructive"
+                        aria-label={`ลบ ${r.name}`}
+                        onClick={() => deleteSavedRoute(r.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </li>
+                  );
+                })}
               </ul>
             </CardContent>
           </Card>
@@ -195,44 +262,54 @@ export function RouteBuilder({
 
         <Button
           variant="secondary"
-          size="sm"
+          size="lg"
           onClick={handleUseCurrentLocation}
           disabled={locating}
-          className="w-full gap-1.5"
+          className="w-full gap-2 font-semibold"
         >
-          <LocateFixed className={`h-3.5 w-3.5 ${locating ? "animate-pulse" : ""}`} />
+          <LocateFixed
+            className={`h-5 w-5 ${locating ? "animate-pulse" : ""}`}
+          />
           {locating ? "กำลังหาตำแหน่ง..." : "ใช้ตำแหน่ง GPS เป็นจุดถัดไป"}
         </Button>
         {locationError && (
           <p className="text-xs text-destructive">{locationError}</p>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={undoDraftPoint}
             disabled={draftPath.length === 0}
-            className="gap-1.5"
+            className="gap-2 border-2 font-semibold"
           >
-            <Undo2 className="h-3.5 w-3.5" /> ย้อน
+            <Undo2 className="h-5 w-5" /> ย้อน
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             onClick={clearDraft}
             disabled={draftPath.length === 0}
-            className="gap-1.5"
+            className="gap-2 border-2 font-semibold"
           >
-            <Trash2 className="h-3.5 w-3.5" /> ล้าง
+            <Trash2 className="h-5 w-5" /> ล้าง
           </Button>
           <Button
-            size="sm"
+            size="xl"
             onClick={handleSave}
-            disabled={draftPath.length < 2}
-            className="ml-auto gap-1.5"
+            disabled={draftPath.length < 2 || saving || routingLoading}
+            className="col-span-2 gap-2"
           >
-            <Save className="h-3.5 w-3.5" /> บันทึก & ใช้เส้นทางนี้
+            {saving || routingLoading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" /> กำลังหาเส้นทางบนถนน...
+              </>
+            ) : (
+              <>
+                <Save className="h-5 w-5" /> บันทึก & ใช้เส้นทางนี้
+              </>
+            )}
           </Button>
         </div>
       </CardContent>

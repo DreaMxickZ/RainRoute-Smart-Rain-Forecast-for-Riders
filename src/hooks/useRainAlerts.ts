@@ -11,19 +11,33 @@ const TARGETS: Array<{ minutes: number; key: SpeechKey }> = [
   { minutes: 5, key: "rain_5" },
 ];
 
+interface UseRainAlertsParams {
+  isNavigating: boolean;
+  analysis: RainAnalysis | null;
+  /** Distance the rider has traveled along the route, in meters (from GPS). */
+  progressM: number | null;
+  /** Time the trip started (for fallback when GPS not available). */
+  startedAt: number | null;
+  /** Average speed in km/h — used to convert remaining distance into minutes. */
+  avgSpeedKmh: number;
+}
+
 /**
- * Watches the rain analysis while navigation is active and triggers
- * appropriate voice alerts.
+ * Watches the rain analysis while navigation is active and triggers voice
+ * alerts based on the rider's *actual* progress along the route (GPS-derived)
+ * rather than time elapsed.
  *
- * - 15/10/5 minute heads-up before the next rain event.
- * - "Entering rain" when current ETA crosses a rain segment.
- * - "Leaving rain" when the rider passes the last rainy segment.
+ * - 15/10/5 minute heads-up before the next rain event
+ * - "Entering rain" when within ~150m of a rain segment
+ * - "Leaving rain" when the rider passes the last rainy segment
  */
-export function useRainAlerts(
-  isNavigating: boolean,
-  analysis: RainAnalysis | null,
-  startedAt: number | null
-) {
+export function useRainAlerts({
+  isNavigating,
+  analysis,
+  progressM,
+  startedAt,
+  avgSpeedKmh,
+}: UseRainAlertsParams) {
   const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
   const announcedRef = useRef<Set<string>>(new Set());
   const insideRainRef = useRef(false);
@@ -41,20 +55,29 @@ export function useRainAlerts(
   }, [isNavigating]);
 
   useEffect(() => {
-    if (!isNavigating || !analysis || startedAt == null) return;
+    if (!isNavigating || !analysis) return;
+    const speedMps = (avgSpeedKmh * 1000) / 3600;
 
     const interval = window.setInterval(() => {
-      const elapsedMs = Date.now() - startedAt;
-      const nextEvent = analysis.events.find(
-        (e) => e.etaMs > elapsedMs
-      );
-      const passedAllEvents =
-        analysis.events.length > 0 &&
-        analysis.events.every((e) => e.etaMs < elapsedMs - 60_000);
+      // Prefer GPS-based progress; fall back to time-based if GPS unavailable.
+      let traveledM: number;
+      if (progressM != null) {
+        traveledM = progressM;
+      } else if (startedAt != null) {
+        const elapsedSec = (Date.now() - startedAt) / 1000;
+        traveledM = elapsedSec * speedMps;
+      } else {
+        return;
+      }
 
-      // Inside-rain logic: any event whose window contains "now".
+      const upcoming = analysis.events.filter(
+        (e) => e.distanceFromStartM > traveledM - 50
+      );
+      const nextEvent = upcoming[0];
+
+      // Inside-rain logic: within ~150m of any rain sample.
       const insideNow = analysis.events.some(
-        (e) => Math.abs(e.etaMs - elapsedMs) < 90_000
+        (e) => Math.abs(e.distanceFromStartM - traveledM) < 150
       );
       if (insideNow && !insideRainRef.current) {
         insideRainRef.current = true;
@@ -64,9 +87,10 @@ export function useRainAlerts(
         speechService.speakKey("leaving_rain");
       }
 
-      // Heads-up announcements.
+      // Heads-up countdown based on remaining distance / current speed.
       if (nextEvent) {
-        const minutesAway = (nextEvent.etaMs - elapsedMs) / 60_000;
+        const remainingM = nextEvent.distanceFromStartM - traveledM;
+        const minutesAway = remainingM / speedMps / 60;
         for (const t of TARGETS) {
           if (minutesAway <= t.minutes && minutesAway > t.minutes - 1) {
             const tag = `${t.key}@${nextEvent.pointIndex}`;
@@ -78,12 +102,16 @@ export function useRainAlerts(
         }
       }
 
-      if (passedAllEvents && insideRainRef.current) {
+      // Passed every rain segment.
+      const passedAll =
+        analysis.events.length > 0 &&
+        analysis.events.every((e) => e.distanceFromStartM < traveledM - 100);
+      if (passedAll && insideRainRef.current) {
         insideRainRef.current = false;
         speechService.speakKey("leaving_rain");
       }
-    }, 5000);
+    }, 3000);
 
     return () => window.clearInterval(interval);
-  }, [isNavigating, analysis, startedAt]);
+  }, [isNavigating, analysis, progressM, startedAt, avgSpeedKmh]);
 }

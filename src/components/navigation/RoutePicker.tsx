@@ -28,11 +28,11 @@ export function RoutePicker({
 }: RoutePickerProps) {
   return (
     <div className="space-y-2">
-      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        เลือกเส้นทาง
+      <label className="text-sm font-bold text-muted-foreground">
+        เส้นทาง
       </label>
       <Select value={value ?? undefined} onValueChange={onChange}>
-        <SelectTrigger className="text-base">
+        <SelectTrigger className="h-14 rounded-xl border-2 text-base font-semibold">
           <SelectValue placeholder="เลือกเส้นทางที่ต้องการเดินทาง" />
         </SelectTrigger>
         <SelectContent>

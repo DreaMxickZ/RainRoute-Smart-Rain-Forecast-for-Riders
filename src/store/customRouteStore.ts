@@ -22,6 +22,8 @@ interface CustomRouteState {
    */
   saveDraft: (finalPath?: LatLng[]) => Route | null;
   deleteSavedRoute: (id: string) => void;
+  /** Replace the geometry of a saved route — used to re-route on roads. */
+  updateSavedRoutePath: (id: string, path: LatLng[]) => void;
 }
 
 export const useCustomRouteStore = create<CustomRouteState>()(
@@ -84,6 +86,27 @@ export const useCustomRouteStore = create<CustomRouteState>()(
       deleteSavedRoute: (id) =>
         set((s) => ({
           savedRoutes: s.savedRoutes.filter((r) => r.id !== id),
+        })),
+
+      updateSavedRoutePath: (id, path) =>
+        set((s) => ({
+          savedRoutes: s.savedRoutes.map((r) =>
+            r.id === id
+              ? {
+                  ...r,
+                  path: path.map((p, i) => ({
+                    lat: p.lat,
+                    lng: p.lng,
+                    name:
+                      i === 0
+                        ? "เริ่มต้น"
+                        : i === path.length - 1
+                          ? "ปลายทาง"
+                          : undefined,
+                  })),
+                }
+              : r
+          ),
         })),
     }),
     {

@@ -27,20 +27,27 @@ export function StatsCard({
   className,
 }: StatsCardProps) {
   return (
-    <Card className={cn("h-full", className)}>
-      <CardContent className="flex h-full flex-col justify-between gap-3 p-5">
+    <Card className={cn("h-full border-2", className)}>
+      <CardContent className="flex h-full flex-col justify-between gap-3 p-4 sm:p-5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <span className="text-sm font-bold text-muted-foreground">
             {label}
           </span>
-          <span className={cn("flex h-9 w-9 items-center justify-center rounded-full bg-muted/60", ACCENT[accent])}>
+          <span
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-xl bg-muted/60",
+              ACCENT[accent]
+            )}
+          >
             {icon}
           </span>
         </div>
         <div>
-          <div className="text-2xl font-bold tracking-tight">{value}</div>
+          <div className="text-3xl font-extrabold leading-tight tracking-tight tabular-nums sm:text-4xl">
+            {value}
+          </div>
           {sub && (
-            <div className="mt-1 text-xs text-muted-foreground">{sub}</div>
+            <div className="mt-1 text-sm text-muted-foreground">{sub}</div>
           )}
         </div>
       </CardContent>

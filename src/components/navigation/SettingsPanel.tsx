@@ -22,16 +22,20 @@ export function SettingsPanel() {
   }
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60 text-primary">
-            <Volume2 className="h-4 w-4" />
+    <div className="divide-y divide-border rounded-2xl border-2 bg-card">
+      <button
+        type="button"
+        onClick={() => onVoiceToggle(!voiceEnabled)}
+        className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <Volume2 className="h-6 w-6" />
           </span>
           <div>
-            <div className="text-sm font-semibold">เสียงแจ้งเตือน</div>
-            <div className="text-xs text-muted-foreground">
-              ประกาศก่อนเข้าเขตฝน 15/10/5 นาที
+            <div className="text-base font-bold">เสียงแจ้งเตือน</div>
+            <div className="text-sm text-muted-foreground">
+              ก่อนเข้าเขตฝน 15 / 10 / 5 นาที
             </div>
           </div>
         </div>
@@ -40,17 +44,21 @@ export function SettingsPanel() {
           onCheckedChange={onVoiceToggle}
           aria-label="สลับเสียงแจ้งเตือน"
         />
-      </div>
+      </button>
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-muted/60 text-primary">
-            <LocateFixed className="h-4 w-4" />
+      <button
+        type="button"
+        onClick={() => setTrackingEnabled(!trackingEnabled)}
+        className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <LocateFixed className="h-6 w-6" />
           </span>
           <div>
-            <div className="text-sm font-semibold">ติดตามตำแหน่งสด</div>
-            <div className="text-xs text-muted-foreground">
-              ใช้ GPS เพื่อแสดงตำแหน่งบนแผนที่
+            <div className="text-base font-bold">ติดตามตำแหน่งสด</div>
+            <div className="text-sm text-muted-foreground">
+              ใช้ GPS แสดงจุดคุณบนแผนที่
             </div>
           </div>
         </div>
@@ -59,7 +67,7 @@ export function SettingsPanel() {
           onCheckedChange={setTrackingEnabled}
           aria-label="สลับติดตามตำแหน่ง"
         />
-      </div>
+      </button>
     </div>
   );
 }

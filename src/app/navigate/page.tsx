@@ -6,7 +6,7 @@ import { LayoutDashboard, Pause, Play, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RoutePicker } from "@/components/navigation/RoutePicker";
 import { RouteBuilder } from "@/components/navigation/RouteBuilder";
-import { RainAlertCard } from "@/components/navigation/RainAlertCard";
+import { BigStatusCard } from "@/components/navigation/BigStatusCard";
 import { SettingsPanel } from "@/components/navigation/SettingsPanel";
 import { RouteMap } from "@/components/map/RouteMap";
 import { DashboardGrid } from "@/components/dashboard/DashboardGrid";
@@ -15,6 +15,8 @@ import { useGeolocation } from "@/hooks/useGeolocation";
 import { useDraftRouting } from "@/hooks/useDraftRouting";
 import { useRainAnalysis } from "@/hooks/useRainAnalysis";
 import { useRainAlerts } from "@/hooks/useRainAlerts";
+import { useRouteProgress } from "@/hooks/useRouteProgress";
+import { RouteProgress } from "@/components/navigation/RouteProgress";
 import { useNavigationStore } from "@/store/navigationStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomRouteStore } from "@/store/customRouteStore";
@@ -45,8 +47,8 @@ export default function NavigatePage() {
   const trackingEnabled = useSettingsStore((s) => s.trackingEnabled);
 
   const [hasGreeted, setHasGreeted] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Default-select the first route on mount (custom first, then preset).
   useEffect(() => {
     if (!selectedRouteId && allRoutes.length > 0) {
       setSelectedRouteId(allRoutes[0].id);
@@ -58,7 +60,6 @@ export default function NavigatePage() {
     [allRoutes, selectedRouteId]
   );
 
-  // OSRM road-following path between the waypoints the user has placed.
   const {
     result: routing,
     loading: routingLoading,
@@ -67,8 +68,6 @@ export default function NavigatePage() {
 
   const draftPolyline = routing?.path ?? draftPath;
 
-  // While drawing, show the draft as the "route" preview on the map so
-  // FitToRoute zooms in on where the user is working.
   const draftAsRoute = useMemo<Route | null>(() => {
     if (!drawingMode || draftPolyline.length < 2) return null;
     return {
@@ -99,7 +98,6 @@ export default function NavigatePage() {
     }
   }, [position, setStorePosition]);
 
-  // Don't analyze the draft — only the saved/selected route.
   const { analysis, loading, error, refresh } = useRainAnalysis(
     drawingMode ? null : route
   );
@@ -108,7 +106,41 @@ export default function NavigatePage() {
     setAnalysis(analysis);
   }, [analysis, setAnalysis]);
 
-  useRainAlerts(isNavigating, analysis, startedAt);
+  // Project the rider's GPS onto the chosen route so progress and ETA are
+  // based on where they actually are, not on how long ago they pressed start.
+  const progress = useRouteProgress(route, position);
+
+  // Live analysis: keep only rain events ahead of the rider and recompute
+  // "minutes until" from remaining distance, not from departure time.
+  const liveAnalysis = useMemo(() => {
+    if (!analysis) return null;
+    if (!isNavigating || !progress) return analysis;
+    const traveledM = progress.distanceAlongRouteM;
+    const speedMps = ((route?.avgSpeedKmh ?? 40) * 1000) / 3600;
+    const upcoming = analysis.events
+      .filter((e) => e.distanceFromStartM > traveledM - 50)
+      .map((e) => {
+        const remainingM = e.distanceFromStartM - traveledM;
+        const minutesUntil = Math.max(
+          0,
+          Math.round(remainingM / speedMps / 60)
+        );
+        return { ...e, minutesUntil };
+      });
+    return {
+      ...analysis,
+      events: upcoming,
+      willRain: upcoming.length > 0,
+    };
+  }, [analysis, isNavigating, progress, route]);
+
+  useRainAlerts({
+    isNavigating,
+    analysis,
+    progressM: progress?.distanceAlongRouteM ?? null,
+    startedAt,
+    avgSpeedKmh: route?.avgSpeedKmh ?? 40,
+  });
 
   const handleMapClick = useCallback(
     (p: LatLng) => {
@@ -140,94 +172,143 @@ export default function NavigatePage() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
-        <section className="h-[320px] sm:h-[420px]">
-          <RouteMap
-            route={displayedRoute}
-            position={position}
-            analysis={drawingMode ? null : analysis}
-            draftWaypoints={drawingMode ? draftPath : undefined}
-            onMapClick={drawingMode ? handleMapClick : undefined}
-          />
-        </section>
+    <div className="space-y-4 pb-28 lg:pb-4">
+      {/* HERO: big status the rider can read at a glance */}
+      {!drawingMode && (
+        <BigStatusCard
+          analysis={liveAnalysis ?? analysis}
+          loading={loading}
+          error={error}
+        />
+      )}
 
-        <aside className="space-y-4">
-          <RouteBuilder
-            onSaved={handleSavedNewRoute}
-            routedPath={routing?.path}
-            routedDistanceM={routing?.distanceM}
-            routingLoading={routingLoading}
-            routingError={routingError}
-          />
+      {!drawingMode && isNavigating && analysis && (
+        <RouteProgress
+          totalDistanceM={analysis.totalDistanceM}
+          projection={progress}
+        />
+      )}
 
+      {/* MAP — fills the screen, large clickable area */}
+      <section className="h-[55dvh] min-h-[320px] lg:h-[480px]">
+        <RouteMap
+          route={displayedRoute}
+          position={position}
+          analysis={drawingMode ? null : analysis}
+          draftWaypoints={drawingMode ? draftPath : undefined}
+          onMapClick={drawingMode ? handleMapClick : undefined}
+        />
+      </section>
+
+      {/* PICKER + BUILDER */}
+      <section className="space-y-3">
+        <RouteBuilder
+          onSaved={handleSavedNewRoute}
+          routedPath={routing?.path}
+          routedDistanceM={routing?.distanceM}
+          routingLoading={routingLoading}
+          routingError={routingError}
+        />
+
+        {!drawingMode && (
           <RoutePicker
             routes={presets}
             customRoutes={savedCustom}
             value={selectedRouteId}
             onChange={setSelectedRouteId}
           />
+        )}
+      </section>
 
-          <div className="flex gap-2">
-            {isNavigating ? (
-              <Button
-                onClick={handleStop}
-                size="lg"
-                variant="destructive"
-                className="flex-1 gap-2"
-              >
-                <Pause className="h-4 w-4" /> หยุดนำทาง
-              </Button>
-            ) : (
-              <Button
-                onClick={handleStart}
-                size="lg"
-                className="flex-1 gap-2"
-                disabled={!route || drawingMode}
-              >
-                <Play className="h-4 w-4" /> เริ่มนำทาง
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={refresh}
-              aria-label="วิเคราะห์ใหม่"
-              disabled={loading || drawingMode}
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {!drawingMode && (
-            <RainAlertCard analysis={analysis} loading={loading} error={error} />
-          )}
-
+      {/* Settings (collapsible — hidden by default to reduce clutter) */}
+      {showSettings && (
+        <section className="space-y-2">
           <SettingsPanel />
-
           {supported === false && (
-            <p className="rounded-md border border-yellow-500/40 bg-yellow-500/5 p-3 text-xs text-yellow-700 dark:text-yellow-300">
-              เบราว์เซอร์นี้ไม่รองรับ GPS — ระบบจะวิเคราะห์ฝนได้ตามปกติ
-              แต่ไม่สามารถแสดงตำแหน่งสดของคุณ
+            <p className="rounded-xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-sm font-medium text-amber-700 dark:text-amber-300">
+              เบราว์เซอร์นี้ไม่รองรับ GPS — วิเคราะห์ฝนได้ปกติ แต่จะไม่เห็นจุดของคุณบนแผนที่
             </p>
           )}
           {geoError && (
-            <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-xs text-destructive">
+            <p className="rounded-xl border-2 border-destructive/40 bg-destructive/10 p-4 text-sm font-medium text-destructive">
               GPS: {geoError}
             </p>
           )}
-
-          <Button asChild variant="ghost" size="sm" className="w-full">
+          <Button asChild variant="ghost" size="lg" className="w-full">
             <Link href="/dashboard" className="gap-2">
-              <LayoutDashboard className="h-4 w-4" /> ดูสรุป Dashboard
+              <LayoutDashboard className="h-5 w-5" /> ดูสรุป Dashboard
             </Link>
           </Button>
-        </aside>
-      </div>
+        </section>
+      )}
 
+      {/* DASHBOARD summary */}
       <section>
         <DashboardGrid analysis={drawingMode ? null : analysis} />
       </section>
+
+      {/* STICKY ACTION BAR — thumb reach on mobile, ปุ่มใหญ่อ่านง่าย */}
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t-2 bg-background/95 px-3 py-3 backdrop-blur-sm shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.2)] lg:static lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:backdrop-blur-0">
+        <div className="container flex max-w-3xl items-center gap-2 lg:max-w-none lg:px-0">
+          {isNavigating ? (
+            <Button
+              onClick={handleStop}
+              size="2xl"
+              variant="destructive"
+              className="flex-1 gap-2"
+            >
+              <Pause className="h-6 w-6" /> หยุดนำทาง
+            </Button>
+          ) : (
+            <Button
+              onClick={handleStart}
+              size="2xl"
+              className="flex-1 gap-2"
+              disabled={!route || drawingMode}
+            >
+              <Play className="h-6 w-6" /> เริ่มนำทาง
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="icon-lg"
+            onClick={refresh}
+            aria-label="วิเคราะห์ใหม่"
+            disabled={loading || drawingMode}
+            className="border-2"
+          >
+            <RefreshCw className="h-6 w-6" />
+          </Button>
+          <Button
+            variant={showSettings ? "default" : "outline"}
+            size="icon-lg"
+            onClick={() => setShowSettings((s) => !s)}
+            aria-label="ตั้งค่า"
+            className="border-2"
+          >
+            <SettingsIcon className="h-6 w-6" />
+          </Button>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
   );
 }

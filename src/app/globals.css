@@ -55,9 +55,19 @@
   body {
     @apply bg-background text-foreground;
     -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
     font-feature-settings: "rlig" 1, "calt" 1;
+    font-size: 16px;
+  }
+  /* Bigger touch targets on touch devices */
+  @media (pointer: coarse) {
+    button,
+    [role="button"],
+    a {
+      touch-action: manipulation;
+    }
   }
 }
 

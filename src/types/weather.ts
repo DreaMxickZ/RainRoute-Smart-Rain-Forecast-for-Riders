@@ -21,7 +21,9 @@ export interface RainEvent {
   pointIndex: number;
   /** Coordinates */
   location: LatLng;
-  /** ETA to reach this point from start */
+  /** Distance from route start in meters — used for GPS-based ETA. */
+  distanceFromStartM: number;
+  /** ETA to reach this point from start (time-based, fallback) */
   etaMs: number;
   /** ISO time we expect to be at this point */
   expectedAt: string;

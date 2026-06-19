@@ -124,6 +124,7 @@ export async function analyzeRainAlongRoute(
     events.push({
       pointIndex: i,
       location: point,
+      distanceFromStartM: cum[i],
       etaMs: etaToPointMs,
       expectedAt,
       minutesUntil: Math.round(etaToPointMs / 60000),

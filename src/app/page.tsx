@@ -31,30 +31,28 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-sky-500/15 via-background to-indigo-500/10 p-6 sm:p-10">
-        <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-4">
-            <Logo size={56} />
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-                ไปไหนวันนี้... <span className="text-primary">เจอฝนไหม?</span>
-              </h1>
-              <p className="max-w-xl text-sm text-muted-foreground sm:text-base">
-                RainRoute คำนวณว่าระหว่างทางคุณจะเจอฝนเมื่อใด
-                พร้อมแจ้งเตือนล่วงหน้าด้วยเสียงภาษาไทย
-                เหมาะกับผู้ใช้รถจักรยานยนต์
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button asChild size="lg" className="gap-2">
-                <Link href="/navigate">
-                  เริ่มนำทาง <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="lg">
-                <Link href="/dashboard">ดู Dashboard</Link>
-              </Button>
-            </div>
+      <section className="relative overflow-hidden rounded-3xl border-2 bg-gradient-to-br from-sky-500/15 via-background to-indigo-500/10 p-6 sm:p-10">
+        <div className="flex flex-col items-start gap-6">
+          <Logo size={64} />
+          <div className="space-y-3">
+            <h1 className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+              ไปไหนวันนี้...
+              <br />
+              <span className="text-primary">เจอฝนไหม?</span>
+            </h1>
+            <p className="max-w-xl text-base text-muted-foreground sm:text-lg">
+              รู้ก่อน เปียกที่ไหน กี่โมง — แอปสำหรับไรเดอร์โดยเฉพาะ
+            </p>
+          </div>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Button asChild size="2xl" className="w-full gap-3 sm:w-auto">
+              <Link href="/navigate">
+                เริ่มนำทาง <ArrowRight className="h-6 w-6" />
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="xl" className="w-full border-2 sm:w-auto">
+              <Link href="/dashboard">ดู Dashboard</Link>
+            </Button>
           </div>
         </div>
       </section>
