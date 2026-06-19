@@ -1,0 +1,42 @@
+{
+  "name": "RainRoute - คาดการณ์ฝนระหว่างทาง",
+  "short_name": "RainRoute",
+  "description": "วิเคราะห์เส้นทางและคาดการณ์ฝนสำหรับผู้ใช้รถจักรยานยนต์",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0ea5e9",
+  "lang": "th",
+  "dir": "ltr",
+  "categories": ["navigation", "weather", "travel"],
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "เริ่มนำทาง",
+      "short_name": "นำทาง",
+      "description": "เริ่มต้นวิเคราะห์เส้นทางและฝน",
+      "url": "/navigate"
+    },
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "สรุปสถานะเส้นทาง",
+      "url": "/dashboard"
+    }
+  ]
+}
