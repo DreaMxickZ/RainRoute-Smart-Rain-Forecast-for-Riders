@@ -23,51 +23,72 @@ export function SettingsPanel() {
 
   return (
     <div className="divide-y divide-border rounded-2xl border-2 bg-card">
-      <button
-        type="button"
-        onClick={() => onVoiceToggle(!voiceEnabled)}
-        className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Volume2 className="h-6 w-6" />
-          </span>
-          <div>
-            <div className="text-base font-bold">เสียงแจ้งเตือน</div>
-            <div className="text-sm text-muted-foreground">
-              ก่อนเข้าเขตฝน 15 / 10 / 5 นาที
-            </div>
-          </div>
-        </div>
-        <Switch
-          checked={voiceEnabled}
-          onCheckedChange={onVoiceToggle}
-          aria-label="สลับเสียงแจ้งเตือน"
-        />
-      </button>
+      <ToggleRow
+        icon={<Volume2 className="h-6 w-6" />}
+        title="เสียงแจ้งเตือน"
+        sub="ก่อนเข้าเขตฝน 15 / 10 / 5 นาที"
+        checked={voiceEnabled}
+        onChange={onVoiceToggle}
+        ariaLabel="สลับเสียงแจ้งเตือน"
+      />
+      <ToggleRow
+        icon={<LocateFixed className="h-6 w-6" />}
+        title="ติดตามตำแหน่งสด"
+        sub="ใช้ GPS แสดงจุดคุณบนแผนที่"
+        checked={trackingEnabled}
+        onChange={setTrackingEnabled}
+        ariaLabel="สลับติดตามตำแหน่ง"
+      />
+    </div>
+  );
+}
 
-      <button
-        type="button"
-        onClick={() => setTrackingEnabled(!trackingEnabled)}
-        className="flex w-full items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <LocateFixed className="h-6 w-6" />
-          </span>
-          <div>
-            <div className="text-base font-bold">ติดตามตำแหน่งสด</div>
-            <div className="text-sm text-muted-foreground">
-              ใช้ GPS แสดงจุดคุณบนแผนที่
-            </div>
-          </div>
+interface ToggleRowProps {
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  ariaLabel: string;
+}
+
+function ToggleRow({
+  icon,
+  title,
+  sub,
+  checked,
+  onChange,
+  ariaLabel,
+}: ToggleRowProps) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onChange(!checked);
+    }
+  }
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      aria-pressed={checked}
+      onClick={() => onChange(!checked)}
+      onKeyDown={handleKeyDown}
+      className="flex w-full cursor-pointer items-center justify-between gap-4 p-4 text-left transition-colors hover:bg-accent/40 active:bg-accent"
+    >
+      <div className="flex items-center gap-3">
+        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          {icon}
+        </span>
+        <div>
+          <div className="text-base font-bold">{title}</div>
+          <div className="text-sm text-muted-foreground">{sub}</div>
         </div>
-        <Switch
-          checked={trackingEnabled}
-          onCheckedChange={setTrackingEnabled}
-          aria-label="สลับติดตามตำแหน่ง"
-        />
-      </button>
+      </div>
+      <Switch
+        checked={checked}
+        onCheckedChange={onChange}
+        aria-label={ariaLabel}
+      />
     </div>
   );
 }

@@ -17,6 +17,10 @@ import { useRainAnalysis } from "@/hooks/useRainAnalysis";
 import { useRainAlerts } from "@/hooks/useRainAlerts";
 import { useRouteProgress } from "@/hooks/useRouteProgress";
 import { RouteProgress } from "@/components/navigation/RouteProgress";
+import { SmartSuggestion } from "@/components/navigation/SmartSuggestion";
+import { ScheduleEditor } from "@/components/navigation/ScheduleEditor";
+import { VoiceTester } from "@/components/navigation/VoiceTester";
+import { suggestRoutes } from "@/utils/routeSuggester";
 import { useNavigationStore } from "@/store/navigationStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { useCustomRouteStore } from "@/store/customRouteStore";
@@ -45,15 +49,44 @@ export default function NavigatePage() {
   const setAnalysis = useNavigationStore((s) => s.setAnalysis);
 
   const trackingEnabled = useSettingsStore((s) => s.trackingEnabled);
+  const schedule = useSettingsStore((s) => s.schedule);
 
   const [hasGreeted, setHasGreeted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Track GPS whenever the page is open (not just while navigating) so the
+  // suggester can recommend the right route based on where the rider is.
+  const { position, error: geoError, supported } = useGeolocation(
+    trackingEnabled
+  );
+
+  // Rank routes by GPS proximity + time-of-day. Recomputed when position
+  // updates or every minute (clock tick).
+  const [clockTick, setClockTick] = useState(0);
   useEffect(() => {
-    if (!selectedRouteId && allRoutes.length > 0) {
+    const t = window.setInterval(() => setClockTick((n) => n + 1), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const suggestions = useMemo(
+    () => suggestRoutes(allRoutes, position, new Date(), schedule),
+    // clockTick re-renders every minute so the time-of-day score stays fresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allRoutes, position, schedule, clockTick]
+  );
+  const topSuggestion = suggestions[0] ?? null;
+
+  // On first mount (no route selected yet), pick the top suggestion if there
+  // is one. Otherwise fall back to the first available route. This only fires
+  // when selectedRouteId is null — never overrides a user choice.
+  useEffect(() => {
+    if (selectedRouteId) return;
+    if (topSuggestion) {
+      setSelectedRouteId(topSuggestion.route.id);
+    } else if (allRoutes.length > 0) {
       setSelectedRouteId(allRoutes[0].id);
     }
-  }, [allRoutes, selectedRouteId, setSelectedRouteId]);
+  }, [allRoutes, selectedRouteId, topSuggestion, setSelectedRouteId]);
 
   const route = useMemo(
     () => allRoutes.find((r) => r.id === selectedRouteId) ?? null,
@@ -82,10 +115,6 @@ export default function NavigatePage() {
   }, [drawingMode, draftPolyline]);
 
   const displayedRoute = drawingMode ? draftAsRoute : route;
-
-  const { position, error: geoError, supported } = useGeolocation(
-    isNavigating && trackingEnabled
-  );
 
   useEffect(() => {
     if (position) {
@@ -172,7 +201,7 @@ export default function NavigatePage() {
   }
 
   return (
-    <div className="space-y-4 pb-28 lg:pb-4">
+    <div className="space-y-4 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-4">
       {/* HERO: big status the rider can read at a glance */}
       {!drawingMode && (
         <BigStatusCard
@@ -190,7 +219,13 @@ export default function NavigatePage() {
       )}
 
       {/* MAP — fills the screen, large clickable area */}
-      <section className="h-[55dvh] min-h-[320px] lg:h-[480px]">
+      <section
+        className={
+          isNavigating
+            ? "h-[40dvh] min-h-[280px] lg:h-[480px]"
+            : "h-[50dvh] min-h-[300px] lg:h-[480px]"
+        }
+      >
         <RouteMap
           route={displayedRoute}
           position={position}
@@ -210,6 +245,14 @@ export default function NavigatePage() {
           routingError={routingError}
         />
 
+        {!drawingMode && !isNavigating && (
+          <SmartSuggestion
+            suggestion={topSuggestion}
+            selectedRouteId={selectedRouteId}
+            onAccept={(r) => setSelectedRouteId(r.id)}
+          />
+        )}
+
         {!drawingMode && (
           <RoutePicker
             routes={presets}
@@ -224,6 +267,8 @@ export default function NavigatePage() {
       {showSettings && (
         <section className="space-y-2">
           <SettingsPanel />
+          <VoiceTester />
+          <ScheduleEditor />
           {supported === false && (
             <p className="rounded-xl border-2 border-amber-500/40 bg-amber-500/10 p-4 text-sm font-medium text-amber-700 dark:text-amber-300">
               เบราว์เซอร์นี้ไม่รองรับ GPS — วิเคราะห์ฝนได้ปกติ แต่จะไม่เห็นจุดของคุณบนแผนที่
@@ -248,7 +293,7 @@ export default function NavigatePage() {
       </section>
 
       {/* STICKY ACTION BAR — thumb reach on mobile, ปุ่มใหญ่อ่านง่าย */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t-2 bg-background/95 px-3 py-3 backdrop-blur-sm shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.2)] lg:static lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:backdrop-blur-0">
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 bg-background/95 px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.25)] lg:static lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:shadow-none lg:backdrop-blur-0">
         <div className="container flex max-w-3xl items-center gap-2 lg:max-w-none lg:px-0">
           {isNavigating ? (
             <Button

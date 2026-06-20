@@ -27,7 +27,12 @@ export function Switch({
       aria-checked={checked}
       id={id}
       disabled={disabled}
-      onClick={() => onCheckedChange(!checked)}
+      onClick={(e) => {
+        // Prevent double-toggle when this Switch is rendered inside a row
+        // wrapper that also toggles on click.
+        e.stopPropagation();
+        onCheckedChange(!checked);
+      }}
       className={cn(
         "inline-flex h-8 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
         checked ? "bg-primary" : "bg-input",

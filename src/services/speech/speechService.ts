@@ -27,12 +27,44 @@ function isSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
+// Known Thai female voice identifiers across major platforms:
+//   iOS / macOS: Kanya, Narisa
+//   Windows:     Premwadee, Achara
+//   Google TTS:  th-TH-Standard-A, th-TH-Wavenet-A, th-TH-Neural2-A
+//   Generic:     anything containing "female"
+const FEMALE_VOICE_RE =
+  /(premwadee|kanya|narisa|achara|standard-?a|wavenet-?a|neural2-?a|female|หญิง)/i;
+
+let preferredVoiceURI: string | null = null;
+
+function setPreferredVoiceURI(uri: string | null) {
+  preferredVoiceURI = uri;
+}
+
+function getThaiVoices(): SpeechSynthesisVoice[] {
+  if (!isSupported()) return [];
+  const voices = window.speechSynthesis.getVoices() ?? [];
+  return voices.filter((v) => v.lang?.toLowerCase().startsWith("th"));
+}
+
 function pickThaiVoice(): SpeechSynthesisVoice | null {
-  if (!isSupported()) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length === 0) return null;
-  const thai = voices.find((v) => v.lang?.toLowerCase().startsWith("th"));
-  return thai ?? null;
+  const thai = getThaiVoices();
+  if (thai.length === 0) return null;
+
+  // 1) Honor explicit user choice if it still exists.
+  if (preferredVoiceURI) {
+    const chosen = thai.find((v) => v.voiceURI === preferredVoiceURI);
+    if (chosen) return chosen;
+  }
+
+  // 2) Prefer female voices by name heuristic.
+  const female = thai.find(
+    (v) => FEMALE_VOICE_RE.test(v.name) || FEMALE_VOICE_RE.test(v.voiceURI)
+  );
+  if (female) return female;
+
+  // 3) Fall back to whatever Thai voice exists.
+  return thai[0];
 }
 
 function rawSpeak(text: string, opts: SpeakOptions): void {
@@ -91,12 +123,68 @@ function unlock(): void {
   window.speechSynthesis.speak(u);
 }
 
+/**
+ * Force-play a message — bypasses the cooldown and the voice-enabled toggle.
+ * Used by the "ทดสอบเสียง" buttons so the rider can preview alerts even when
+ * voice is currently disabled or has just played.
+ */
+function preview(text: string, opts: SpeakOptions = {}): void {
+  if (!isSupported()) return;
+  cancel();
+  rawSpeak(text, opts);
+}
+
+export interface VoiceOption {
+  voiceURI: string;
+  name: string;
+  lang: string;
+  isFemale: boolean;
+}
+
+export interface VoiceInfo {
+  supported: boolean;
+  thaiAvailable: boolean;
+  voiceName?: string;
+  voiceLang?: string;
+  voiceURI?: string;
+  thaiVoices: VoiceOption[];
+}
+
+function getVoiceInfo(): VoiceInfo {
+  if (!isSupported()) {
+    return { supported: false, thaiAvailable: false, thaiVoices: [] };
+  }
+  const thai = getThaiVoices();
+  const thaiVoices: VoiceOption[] = thai.map((v) => ({
+    voiceURI: v.voiceURI,
+    name: v.name,
+    lang: v.lang,
+    isFemale: FEMALE_VOICE_RE.test(v.name) || FEMALE_VOICE_RE.test(v.voiceURI),
+  }));
+  const picked = pickThaiVoice();
+  if (picked) {
+    return {
+      supported: true,
+      thaiAvailable: true,
+      voiceName: picked.name,
+      voiceLang: picked.lang,
+      voiceURI: picked.voiceURI,
+      thaiVoices,
+    };
+  }
+  return { supported: true, thaiAvailable: false, thaiVoices };
+}
+
 export const speechService = {
   isSupported,
   setEnabled,
+  setPreferredVoiceURI,
   speakKey,
   speakRaw,
+  preview,
   cancel,
   unlock,
+  getVoiceInfo,
+  getThaiVoices,
   messages: MESSAGES,
 };

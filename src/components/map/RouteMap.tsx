@@ -27,7 +27,7 @@ export function RouteMap(props: RouteMapProps) {
   return (
     <div
       className={cn(
-        "relative h-full min-h-[280px] w-full overflow-hidden rounded-xl border bg-muted/30 shadow-inner",
+        "relative isolate h-full min-h-[280px] w-full overflow-hidden rounded-xl border bg-muted/30 shadow-inner",
         props.className
       )}
     >
